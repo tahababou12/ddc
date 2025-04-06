@@ -1,4 +1,5 @@
 import os
+import sys
 import shutil
 import uuid
 import zipfile
@@ -8,6 +9,10 @@ import numpy as np
 from flask import Flask, request, send_file, send_from_directory
 from essentia.standard import MetadataReader
 from scipy.signal import argrelextrema
+
+# Add the project root directory to Python path
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from learn.extract_feats import extract_mel_feats, create_analyzers
 from learn.onset_net import OnsetNet # step placement
 from learn.sym_net import SymNet # step selection
@@ -57,38 +62,62 @@ def weighted_pick(weights):
 
 def load_sp_model(ckpt_fp, batch_size=128):
     """Load the step placement model."""
-    model_sp = OnsetNet(
-        mode='gen',
-        batch_size=batch_size,
-        audio_context_radius=7,
-        audio_nbands=80,
-        audio_nchannels=3,
-        nfeats=5,
-        cnn_filter_shapes=[(7, 3, 10), (3, 3, 20)],
-        cnn_pool=[(1, 3), (1, 3)],
-        dnn_sizes=[256, 128],
-        dnn_nonlin='relu'
-    )
-    model_sp.load_weights(ckpt_fp)
-    return model_sp
+    print(f"Loading step placement model from: {ckpt_fp}")
+    try:
+        model_sp = OnsetNet(
+            mode='gen',
+            batch_size=batch_size,
+            audio_context_radius=7,
+            audio_nbands=80,
+            audio_nchannels=3,
+            nfeats=5,
+            cnn_filter_shapes=[(7, 3, 10), (3, 3, 20)],
+            cnn_pool=[(1, 3), (1, 3)],
+            dnn_sizes=[256, 128],
+            dnn_nonlin='relu',
+            cnn_init='glorot_uniform',
+            rnn_cell_type='lstm',
+            rnn_size=128,
+            rnn_nlayers=2,
+            rnn_keep_prob=1.0,
+            target_weight_strategy=None,
+            grad_clip=5.0,
+            opt='adam'
+        )
+        model_sp.load_weights(ckpt_fp)
+        print("Step placement model loaded successfully")
+        return model_sp
+    except Exception as e:
+        print(f"Error loading step placement model: {e}")
+        print(f"This may be due to a version incompatibility between the model and current TensorFlow/Keras")
+        print(f"Try using TensorFlow 1.x or a compatible version")
+        raise
 
 def load_ss_model(ckpt_fp):
     """Load the step selection model."""
-    model_ss = SymNet(
-        mode='gen',
-        batch_size=1,
-        nunroll=1,
-        sym_in_type='bagofarrows',
-        sym_embedding_size=0,
-        sym_out_type='onehot',
-        sym_narrows=4,
-        sym_narrowclasses=4,
-        rnn_cell_type='lstm',
-        rnn_size=128,
-        rnn_nlayers=2
-    )
-    model_ss.load_weights(ckpt_fp)
-    return model_ss
+    print(f"Loading step selection model from: {ckpt_fp}")
+    try:
+        model_ss = SymNet(
+            mode='gen',
+            batch_size=1,
+            nunroll=1,
+            sym_in_type='bagofarrows',
+            sym_embedding_size=0,
+            sym_out_type='onehot',
+            sym_narrows=4,
+            sym_narrowclasses=4,
+            rnn_cell_type='lstm',
+            rnn_size=128,
+            rnn_nlayers=2
+        )
+        model_ss.load_weights(ckpt_fp)
+        print("Step selection model loaded successfully")
+        return model_ss
+    except Exception as e:
+        print(f"Error loading step selection model: {e}")
+        print(f"This may be due to a version incompatibility between the model and current TensorFlow/Keras")
+        print(f"Try using TensorFlow 1.x or a compatible version")
+        raise
 
 def create_chart_dir(artist, title, audio_fp, norm, analyzers, sp_model, sp_batch_size, diffs, ss_model, idx_to_label, out_dir, delete_audio=False):
     """Generate a StepMania chart directory."""
@@ -214,8 +243,13 @@ if __name__ == '__main__':
     parser.add_argument('--max_file_size', type=int, default=None)
     ARGS = parser.parse_args()
 
-    with open(ARGS.norm_pkl_fp, 'rb') as f:
-        NORM = pickle.load(f)
+    try:
+        with open(ARGS.norm_pkl_fp, 'rb') as f:
+            NORM = pickle.load(f, encoding='latin1')
+    except:
+        with open(ARGS.norm_pkl_fp, 'rb') as f:
+            NORM = pickle.load(f)
+    
     ANALYZERS = create_analyzers(nhop=441)
     with open(ARGS.labels_txt_fp, 'r') as f:
         IDX_TO_LABEL = {i + 1: l for i, l in enumerate(f.read().splitlines())}

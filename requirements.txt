@@ -1,0 +1,7 @@
+tensorflow==1.15.5 
+h5py==2.10.0 
+essentia
+numpy<2.0
+tqdm
+scipy
+flask
